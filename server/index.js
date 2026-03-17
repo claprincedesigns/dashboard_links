@@ -8,8 +8,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+app.use('/api/panels',     require('./routes/panels'));
 app.use('/api/categories', require('./routes/categories'));
-app.use('/api/links', require('./routes/links'));
+app.use('/api/links',      require('./routes/links'));
 
 // Serve built frontend in production only
 if (process.env.NODE_ENV === 'production') {

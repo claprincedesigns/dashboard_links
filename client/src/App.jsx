@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import CategoryCard from './components/CategoryCard.jsx';
 import LinkModal from './components/LinkModal.jsx';
 import CategoryModal from './components/CategoryModal.jsx';
+import PanelModal from './components/PanelModal.jsx';
 
 const API = '/api';
 
@@ -11,42 +12,91 @@ const PlusIcon = () => (
   </svg>
 );
 
+const XIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
 export default function App() {
-  const [categories, setCategories] = useState([]);
+  const [panels, setPanels]             = useState([]);
+  const [activePanelId, setActivePanelId] = useState(null);
+  const [categories, setCategories]     = useState([]);
 
   // Modal state
-  const [linkModal, setLinkModal]       = useState(null);
-  const [showCatModal, setShowCatModal] = useState(false);
+  const [linkModal, setLinkModal]         = useState(null);
+  const [showCatModal, setShowCatModal]   = useState(false);
+  const [showPanelModal, setShowPanelModal] = useState(false);
 
   // Drag state
-  const [drag, setDrag]           = useState(null); // { type: 'cat'|'link', id, catId? }
+  const [drag, setDrag]             = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
 
-  const fetchAll = useCallback(async () => {
-    const res = await fetch(`${API}/categories`);
-    setCategories(await res.json());
+  // ── Data fetching ──────────────────────────────────────
+  const fetchPanels = useCallback(async () => {
+    const data = await fetch(`${API}/panels`).then(r => r.json());
+    setPanels(data);
+    return data;
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const fetchCategories = useCallback(async (panelId) => {
+    if (!panelId) return;
+    const data = await fetch(`${API}/categories?panel_id=${panelId}`).then(r => r.json());
+    setCategories(data);
+  }, []);
 
-  // ── Category CRUD ──────────────────────────────────────
+  // On mount: load panels, then activate the first one
+  useEffect(() => {
+    fetchPanels().then(data => {
+      if (data.length > 0) setActivePanelId(data[0].id);
+    });
+  }, [fetchPanels]);
+
+  // When active panel changes, load its categories
+  useEffect(() => {
+    fetchCategories(activePanelId);
+  }, [activePanelId, fetchCategories]);
+
+  // ── Panel actions ──────────────────────────────────────
+  const handleAddPanel = async (name) => {
+    const newPanel = await fetch(`${API}/panels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).then(r => r.json());
+    setShowPanelModal(false);
+    await fetchPanels();
+    setActivePanelId(newPanel.id);
+  };
+
+  const handleDeletePanel = async (id) => {
+    const panel = panels.find(p => p.id === id);
+    if (!confirm(`Delete panel "${panel?.name}" and all its categories and links?`)) return;
+    await fetch(`${API}/panels/${id}`, { method: 'DELETE' });
+    const remaining = await fetchPanels();
+    if (activePanelId === id && remaining.length > 0) {
+      setActivePanelId(remaining[0].id);
+    }
+  };
+
+  // ── Category actions ───────────────────────────────────
   const handleAddCategory = async (name) => {
     await fetch(`${API}/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, panel_id: activePanelId }),
     });
     setShowCatModal(false);
-    fetchAll();
+    fetchCategories(activePanelId);
   };
 
   const handleDeleteCategory = async (id, name) => {
     if (!confirm(`Delete category "${name}" and all its links?`)) return;
     await fetch(`${API}/categories/${id}`, { method: 'DELETE' });
-    fetchAll();
+    fetchCategories(activePanelId);
   };
 
-  // ── Link CRUD ──────────────────────────────────────────
+  // ── Link actions ───────────────────────────────────────
   const handleSaveLink = async ({ name, url, category_id }) => {
     const editing = linkModal?.initial;
     if (editing) {
@@ -63,13 +113,13 @@ export default function App() {
       });
     }
     setLinkModal(null);
-    fetchAll();
+    fetchCategories(activePanelId);
   };
 
   const handleDeleteLink = async (id) => {
     if (!confirm('Delete this link?')) return;
     await fetch(`${API}/links/${id}`, { method: 'DELETE' });
-    fetchAll();
+    fetchCategories(activePanelId);
   };
 
   const handleAddLink  = (catId) => setLinkModal({ defaultCatId: catId });
@@ -84,7 +134,6 @@ export default function App() {
   // ── Drag helpers ───────────────────────────────────────
   const cleanupDrag = () => { setDrag(null); setDropTarget(null); };
 
-  // Reorder categories in local state and persist
   const reorderCats = (fromId, toId) => {
     setCategories(prev => {
       const cats = [...prev];
@@ -102,7 +151,6 @@ export default function App() {
     });
   };
 
-  // Move / reorder a link, optionally across categories
   const moveLink = (fromLinkId, fromCatId, toCatId, targetLinkId, side) => {
     setCategories(prev => {
       const cats = prev.map(c => ({ ...c, links: [...c.links] }));
@@ -134,18 +182,11 @@ export default function App() {
     });
   };
 
-  // ── Drag event handlers (passed to CategoryCard) ───────
-  const onCatDragStart = (catId) => {
-    setDrag({ type: 'cat', id: catId });
-  };
+  // ── Drag event handlers ────────────────────────────────
+  const onCatDragStart  = (catId)         => setDrag({ type: 'cat', id: catId });
+  const onLinkDragStart = (linkId, catId) => setDrag({ type: 'link', id: linkId, catId });
+  const onDragEnd       = ()              => cleanupDrag();
 
-  const onLinkDragStart = (linkId, catId) => {
-    setDrag({ type: 'link', id: linkId, catId });
-  };
-
-  const onDragEnd = () => cleanupDrag();
-
-  // Called on every card's onDragOver (handles both cat + link drags)
   const onCardDragOver = (catId, e) => {
     e.preventDefault();
     if (!drag) return;
@@ -161,7 +202,6 @@ export default function App() {
     }
   };
 
-  // Called on each link's onDragOver (stops bubbling so card doesn't override)
   const onLinkDragOver = (linkId, catId, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -178,18 +218,13 @@ export default function App() {
     );
   };
 
-  // Drop on a card (empty area, header, or between links)
   const onCardDrop = (catId) => {
     if (!drag) return;
-    if (drag.type === 'cat' && drag.id !== catId) {
-      reorderCats(drag.id, catId);
-    } else if (drag.type === 'link') {
-      moveLink(drag.id, drag.catId, catId, null, null);
-    }
+    if (drag.type === 'cat' && drag.id !== catId) reorderCats(drag.id, catId);
+    else if (drag.type === 'link')                moveLink(drag.id, drag.catId, catId, null, null);
     cleanupDrag();
   };
 
-  // Drop on a specific link row
   const onLinkDrop = (targetLinkId, targetCatId) => {
     if (!drag || drag.type !== 'link') return;
     const side = dropTarget?.type === 'link' ? dropTarget.side : 'before';
@@ -204,6 +239,7 @@ export default function App() {
     onCardDrop, onLinkDrop,
   };
 
+  // ── Render ─────────────────────────────────────────────
   return (
     <div className="page">
       <div className="page-header">
@@ -223,6 +259,36 @@ export default function App() {
         </div>
       </div>
 
+      {/* Panel tab bar */}
+      <div className="panel-bar">
+        {panels.map(panel => (
+          <div
+            key={panel.id}
+            className={`panel-tab${panel.id === activePanelId ? ' active' : ''}`}
+          >
+            <button
+              className="panel-tab-label"
+              onClick={() => setActivePanelId(panel.id)}
+            >
+              {panel.name}
+            </button>
+            {panels.length > 1 && (
+              <button
+                className="panel-tab-close"
+                title={`Delete panel "${panel.name}"`}
+                onClick={() => handleDeletePanel(panel.id)}
+              >
+                <XIcon />
+              </button>
+            )}
+          </div>
+        ))}
+        <button className="panel-add" onClick={() => setShowPanelModal(true)} title="New panel">
+          <PlusIcon />
+        </button>
+      </div>
+
+      {/* Category grid */}
       {categories.length === 0 ? (
         <div style={{ textAlign: 'center', marginTop: '80px', color: 'var(--muted)' }}>
           <p style={{ fontSize: '15px', marginBottom: '12px' }}>No categories yet.</p>
@@ -244,6 +310,10 @@ export default function App() {
             />
           ))}
         </div>
+      )}
+
+      {showPanelModal && (
+        <PanelModal onSave={handleAddPanel} onClose={() => setShowPanelModal(false)} />
       )}
 
       {showCatModal && (

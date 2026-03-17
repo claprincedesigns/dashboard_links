@@ -304,6 +304,82 @@ html, body, #root {
   letter-spacing: 0.03em;
 }
 
+/* ── Panel tab bar ─────────────────────────────────────── */
+.panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-tab {
+  display: flex;
+  align-items: center;
+  position: relative;
+  margin-bottom: -1px; /* sit on top of panel-bar border */
+}
+
+.panel-tab-label {
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.panel-tab-label:hover { color: var(--text); }
+
+.panel-tab.active .panel-tab-label {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.panel-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: -6px;
+  margin-right: 4px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+
+.panel-tab:hover .panel-tab-close    { opacity: 1; }
+.panel-tab-close:hover               { background: rgba(248,113,113,0.12); color: var(--danger); }
+
+.panel-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.panel-add:hover { color: var(--accent); background: var(--accent-dim); }
+
 /* ── Drag handles ──────────────────────────────────────── */
 .drag-handle {
   display: flex;
