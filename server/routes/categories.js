@@ -25,6 +25,15 @@ router.post('/', (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid, name: name.trim(), pos: maxPos + 1, links: [] });
 });
 
+// PATCH reorder categories
+router.patch('/reorder', (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'array required' });
+  const update = db.prepare('UPDATE categories SET pos = ? WHERE id = ?');
+  db.transaction(() => items.forEach(({ id, pos }) => update.run(pos, id)))();
+  res.status(204).end();
+});
+
 // DELETE category
 router.delete('/:id', (req, res) => {
   const info = db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);

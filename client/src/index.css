@@ -304,6 +304,41 @@ html, body, #root {
   letter-spacing: 0.03em;
 }
 
+/* ── Drag handles ──────────────────────────────────────── */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.12s;
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.drag-handle:active { cursor: grabbing; }
+
+.card-header .drag-handle { margin-right: 6px; }
+.link-item    .drag-handle { margin-right: 6px; }
+
+.card:hover .card-header .drag-handle,
+.link-item:hover .drag-handle { opacity: 1; }
+
+/* ── Drag states ───────────────────────────────────────── */
+.card.dragging      { opacity: 0.25; }
+.link-item.dragging { opacity: 0.25; }
+
+/* Category drop target */
+.card.drop-over {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* Link insertion indicators */
+.link-item.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.link-item.drop-after  { box-shadow:  0 2px 0 var(--accent); }
+
 /* ── Scrollbar ─────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }

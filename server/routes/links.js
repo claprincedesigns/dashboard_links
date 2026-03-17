@@ -35,6 +35,15 @@ router.put('/:id', (req, res) => {
   res.json({ id: Number(req.params.id), category_id: newCatId, name: name.trim(), url: url.trim(), pos: existing.pos });
 });
 
+// PATCH reorder/move links
+router.patch('/reorder', (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'array required' });
+  const update = db.prepare('UPDATE links SET pos = ?, category_id = ? WHERE id = ?');
+  db.transaction(() => items.forEach(({ id, pos, category_id }) => update.run(pos, category_id, id)))();
+  res.status(204).end();
+});
+
 // DELETE link
 router.delete('/:id', (req, res) => {
   const info = db.prepare('DELETE FROM links WHERE id = ?').run(req.params.id);

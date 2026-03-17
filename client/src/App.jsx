@@ -15,8 +15,12 @@ export default function App() {
   const [categories, setCategories] = useState([]);
 
   // Modal state
-  const [linkModal, setLinkModal]         = useState(null); // null | { initial?, defaultCatId? }
-  const [showCatModal, setShowCatModal]   = useState(false);
+  const [linkModal, setLinkModal]       = useState(null);
+  const [showCatModal, setShowCatModal] = useState(false);
+
+  // Drag state
+  const [drag, setDrag]           = useState(null); // { type: 'cat'|'link', id, catId? }
+  const [dropTarget, setDropTarget] = useState(null);
 
   const fetchAll = useCallback(async () => {
     const res = await fetch(`${API}/categories`);
@@ -25,7 +29,7 @@ export default function App() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // ── Category actions ──────────────────────────────────
+  // ── Category CRUD ──────────────────────────────────────
   const handleAddCategory = async (name) => {
     await fetch(`${API}/categories`, {
       method: 'POST',
@@ -42,7 +46,7 @@ export default function App() {
     fetchAll();
   };
 
-  // ── Link actions ──────────────────────────────────────
+  // ── Link CRUD ──────────────────────────────────────────
   const handleSaveLink = async ({ name, url, category_id }) => {
     const editing = linkModal?.initial;
     if (editing) {
@@ -68,21 +72,137 @@ export default function App() {
     fetchAll();
   };
 
-  // Pre-select the clicked category when opening "add link"
-  const handleAddLink = (catId) => {
-    setLinkModal({ defaultCatId: catId });
-  };
+  const handleAddLink  = (catId) => setLinkModal({ defaultCatId: catId });
+  const handleEditLink = (link)  => setLinkModal({ initial: link });
 
-  const handleEditLink = (link) => {
-    setLinkModal({ initial: link });
-  };
-
-  // Build initial for LinkModal: if adding, fake an object so the select defaults correctly
   const linkModalInitial = linkModal?.initial
     ? linkModal.initial
     : linkModal?.defaultCatId
       ? { category_id: linkModal.defaultCatId }
       : null;
+
+  // ── Drag helpers ───────────────────────────────────────
+  const cleanupDrag = () => { setDrag(null); setDropTarget(null); };
+
+  // Reorder categories in local state and persist
+  const reorderCats = (fromId, toId) => {
+    setCategories(prev => {
+      const cats = [...prev];
+      const fromIdx = cats.findIndex(c => c.id === fromId);
+      const toIdx   = cats.findIndex(c => c.id === toId);
+      const [moved] = cats.splice(fromIdx, 1);
+      cats.splice(toIdx, 0, moved);
+      const reordered = cats.map((c, i) => ({ ...c, pos: i }));
+      fetch(`${API}/categories/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reordered.map(c => ({ id: c.id, pos: c.pos }))),
+      });
+      return reordered;
+    });
+  };
+
+  // Move / reorder a link, optionally across categories
+  const moveLink = (fromLinkId, fromCatId, toCatId, targetLinkId, side) => {
+    setCategories(prev => {
+      const cats = prev.map(c => ({ ...c, links: [...c.links] }));
+      const srcCat = cats.find(c => c.id === fromCatId);
+      const fromIdx = srcCat.links.findIndex(l => l.id === fromLinkId);
+      const [movedLink] = srcCat.links.splice(fromIdx, 1);
+      movedLink.category_id = toCatId;
+
+      const dstCat = cats.find(c => c.id === toCatId);
+      if (targetLinkId === null) {
+        dstCat.links.push(movedLink);
+      } else {
+        const toIdx = dstCat.links.findIndex(l => l.id === targetLinkId);
+        dstCat.links.splice(side === 'before' ? toIdx : toIdx + 1, 0, movedLink);
+      }
+
+      const updates = [];
+      cats.forEach(cat => cat.links.forEach((l, i) => {
+        l.pos = i;
+        updates.push({ id: l.id, pos: i, category_id: cat.id });
+      }));
+
+      fetch(`${API}/links/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      return cats;
+    });
+  };
+
+  // ── Drag event handlers (passed to CategoryCard) ───────
+  const onCatDragStart = (catId) => {
+    setDrag({ type: 'cat', id: catId });
+  };
+
+  const onLinkDragStart = (linkId, catId) => {
+    setDrag({ type: 'link', id: linkId, catId });
+  };
+
+  const onDragEnd = () => cleanupDrag();
+
+  // Called on every card's onDragOver (handles both cat + link drags)
+  const onCardDragOver = (catId, e) => {
+    e.preventDefault();
+    if (!drag) return;
+    if (drag.type === 'cat') {
+      if (drag.id === catId) { setDropTarget(null); return; }
+      setDropTarget(prev =>
+        prev?.type === 'cat' && prev.id === catId ? prev : { type: 'cat', id: catId }
+      );
+    } else if (drag.type === 'link') {
+      setDropTarget(prev =>
+        prev?.type === 'card' && prev.catId === catId ? prev : { type: 'card', catId }
+      );
+    }
+  };
+
+  // Called on each link's onDragOver (stops bubbling so card doesn't override)
+  const onLinkDragOver = (linkId, catId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!drag || drag.type !== 'link' || drag.id === linkId) {
+      setDropTarget(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const side = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    setDropTarget(prev =>
+      prev?.type === 'link' && prev.id === linkId && prev.side === side
+        ? prev
+        : { type: 'link', id: linkId, catId, side }
+    );
+  };
+
+  // Drop on a card (empty area, header, or between links)
+  const onCardDrop = (catId) => {
+    if (!drag) return;
+    if (drag.type === 'cat' && drag.id !== catId) {
+      reorderCats(drag.id, catId);
+    } else if (drag.type === 'link') {
+      moveLink(drag.id, drag.catId, catId, null, null);
+    }
+    cleanupDrag();
+  };
+
+  // Drop on a specific link row
+  const onLinkDrop = (targetLinkId, targetCatId) => {
+    if (!drag || drag.type !== 'link') return;
+    const side = dropTarget?.type === 'link' ? dropTarget.side : 'before';
+    moveLink(drag.id, drag.catId, targetCatId, targetLinkId, side);
+    cleanupDrag();
+  };
+
+  const dragProps = {
+    drag, dropTarget,
+    onCatDragStart, onLinkDragStart, onDragEnd,
+    onCardDragOver, onLinkDragOver,
+    onCardDrop, onLinkDrop,
+  };
 
   return (
     <div className="page">
@@ -120,6 +240,7 @@ export default function App() {
               onEditLink={handleEditLink}
               onDeleteLink={handleDeleteLink}
               onDeleteCategory={handleDeleteCategory}
+              {...dragProps}
             />
           ))}
         </div>
