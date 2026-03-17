@@ -87,7 +87,7 @@ export default function App() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1>Dashboard</h1>
+        <h1>links</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="btn btn-ghost" onClick={() => setShowCatModal(true)}>
             <PlusIcon /> Category
