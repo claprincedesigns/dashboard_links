@@ -55,6 +55,13 @@ html, body, #root {
   margin-right: 2px;
 }
 
+.greeting {
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

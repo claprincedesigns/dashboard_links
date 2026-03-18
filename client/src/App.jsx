@@ -12,6 +12,14 @@ const PlusIcon = () => (
   </svg>
 );
 
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'good morning.';
+  if (h < 17) return 'good afternoon.';
+  if (h < 21) return 'good evening.';
+  return 'good night.';
+}
+
 const XIcon = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -243,7 +251,7 @@ export default function App() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1>links</h1>
+        <h1>links <span className="greeting">— {greeting()}</span></h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="btn btn-ghost" onClick={() => setShowCatModal(true)}>
             <PlusIcon /> Category
